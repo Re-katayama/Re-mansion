@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Re:Mansion — 案件管理・見積作成</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --navy: #0F2744;
+  --navy-mid: #1A3A5C;
+  --blue: #1A6BBF;
+  --blue-light: #E8F1FB;
+  --accent: #D4A843;
+  --bg: #F7F8FA;
+  --bg-card: #FFFFFF;
+  --border: #E2E6EC;
+  --text: #1A2332;
+  --text-muted: #6B7A8D;
+  --text-light: #9BA8B5;
+  --success: #1A8C5C;
+  --success-bg: #E8F7F1;
+  --warning: #B87A0F;
+  --warning-bg: #FDF4E3;
+  --danger: #C0392B;
+  --danger-bg: #FDF0EE;
+  --info-bg: #E8F1FB;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow: 0 2px 12px rgba(15,39,68,.07);
+  --shadow-lg: 0 8px 32px rgba(15,39,68,.12);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans JP', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.6; }
+
+/* ── Layout ── */
+.sidebar {
+  position: fixed; left: 0; top: 0; bottom: 0; width: 220px;
+  background: var(--navy); display: flex; flex-direction: column;
+  z-index: 100;
+}
+.sidebar-logo {
+  padding: 24px 20px 20px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.sidebar-logo .brand { font-family: 'DM Sans', sans-serif; font-size: 20px; font-weight: 500; color: #fff; letter-spacing: -.5px; }
+.sidebar-logo .brand span { color: var(--accent); }
+.sidebar-logo .sub { font-size: 10px; color: rgba(255,255,255,.4); letter-spacing: 1px; text-transform: uppercase; margin-top: 2px; }
+.nav-items { padding: 16px 12px; flex: 1; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  color: rgba(255,255,255,.6); cursor: pointer; font-size: 13px;
+  font-weight: 400; transition: all .15s; margin-bottom: 2px;
+}
+.nav-item:hover { background: rgba(255,255,255,.07); color: #fff; }
+.nav-item.active { background: rgba(255,255,255,.12); color: #fff; font-weight: 500; }
+.nav-item .icon { width: 18px; font-size: 15px; text-align: center; }
+.sidebar-bottom {
+  padding: 16px 12px;
+  border-top: 1px solid rgba(255,255,255,.08);
+}
+.sidebar-bottom .version { font-size: 10px; color: rgba(255,255,255,.25); text-align: center; }
+
+.main { margin-left: 220px; min-height: 100vh; }
+.topbar {
+  background: var(--bg-card); border-bottom: 1px solid var(--border);
+  padding: 0 32px; height: 60px; display: flex; align-items: center;
+  justify-content: space-between; position: sticky; top: 0; z-index: 50;
+}
+.topbar-title { font-size: 16px; font-weight: 500; color: var(--text); }
+.topbar-actions { display: flex; gap: 8px; align-items: center; }
+.content { padding: 28px 32px; }
+
+/* ── Screens ── */
+.screen { display: none; }
+.screen.show { display: block; }
+
+/* ── Cards & Stats ── */
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.stat-card {
+  background: var(--bg-card); border-radius: var(--radius);
+  padding: 18px 20px; border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.stat-card .lbl { font-size: 11px; color: var(--text-muted); font-weight: 500; letter-spacing: .5px; text-transform: uppercase; margin-bottom: 8px; }
+.stat-card .val { font-size: 26px; font-weight: 700; color: var(--text); font-family: 'DM Sans', sans-serif; }
+.stat-card .sub { font-size: 11px; color: var(--text-light); margin-top: 4px; }
+.stat-card.accent { background: var(--navy); border-color: var(--navy); }
+.stat-card.accent .lbl { color: rgba(255,255,255,.5); }
+.stat-card.accent .val { color: #fff; }
+.stat-card.accent .sub { color: rgba(255,255,255,.4); }
+
+/* ── Table ── */
+.table-card {
+  background: var(--bg-card); border-radius: var(--radius);
+  border: 1px solid var(--border); box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.table-toolbar {
+  padding: 16px 20px; display: flex; align-items: center;
+  gap: 12px; border-bottom: 1px solid var(--border);
+}
+.search-box {
+  flex: 1; display: flex; align-items: center; gap: 8px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 8px 12px;
+}
+.search-box input { flex: 1; border: none; background: transparent; font-size: 13px; color: var(--text); outline: none; font-family: inherit; }
+.search-box input::placeholder { color: var(--text-light); }
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  background: var(--bg); padding: 10px 16px; text-align: left;
+  font-size: 11px; font-weight: 600; color: var(--text-muted);
+  letter-spacing: .5px; text-transform: uppercase;
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+tbody td {
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+  font-size: 13px; vertical-align: middle;
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: var(--bg); cursor: pointer; }
+.td-name { font-weight: 500; color: var(--text); }
+.td-site { font-size: 12px; color: var(--text-muted); }
+.td-meta { font-size: 12px; color: var(--text-muted); }
+.td-budget { font-size: 13px; font-weight: 500; font-family: 'DM Sans', sans-serif; }
+
+/* ── Badges ── */
+.badge {
+  display: inline-flex; align-items: center; padding: 3px 10px;
+  border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap;
+}
+.badge-shin { background: var(--info-bg); color: var(--blue); }
+.badge-chu { background: var(--warning-bg); color: var(--warning); }
+.badge-new { background: var(--success-bg); color: var(--success); }
+.badge-quote { background: var(--info-bg); color: var(--blue); }
+.badge-order { background: #F0E8FB; color: #6B21A8; }
+.badge-lost { background: #F5F5F5; color: #999; }
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  border: 1px solid transparent; transition: all .15s;
+  font-family: inherit; white-space: nowrap;
+}
+.btn-primary { background: var(--blue); color: #fff; border-color: var(--blue); }
+.btn-primary:hover { background: #155BA0; }
+.btn-outline { background: transparent; color: var(--text-muted); border-color: var(--border); }
+.btn-outline:hover { background: var(--bg); color: var(--text); }
+.btn-ghost { background: transparent; color: var(--text-muted); border-color: transparent; }
+.btn-ghost:hover { background: var(--bg); }
+.btn-danger { background: transparent; color: var(--danger); border-color: transparent; }
+.btn-danger:hover { background: var(--danger-bg); }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-lg { padding: 11px 24px; font-size: 14px; }
+.btn-block { width: 100%; justify-content: center; }
+.btn-accent { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-accent:hover { background: #B8922E; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ── Action row ── */
+.row-actions { display: flex; gap: 4px; }
+
+/* ── Modal ── */
+.overlay {
+  position: fixed; inset: 0; background: rgba(15,39,68,.5);
+  z-index: 200; display: none; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.overlay.show { display: flex; }
+.modal {
+  background: var(--bg-card); border-radius: var(--radius);
+  padding: 28px; width: min(560px, 100%);
+  box-shadow: var(--shadow-lg); max-height: 90vh; overflow-y: auto;
+}
+.modal-header { margin-bottom: 24px; }
+.modal-header h2 { font-size: 18px; font-weight: 600; }
+.modal-header p { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+.form-grid .full { grid-column: 1/-1; }
+.field label { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); letter-spacing: .4px; text-transform: uppercase; margin-bottom: 6px; }
+.field input, .field select, .field textarea {
+  width: 100%; padding: 9px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--bg); color: var(--text); font-size: 13px;
+  font-family: inherit; outline: none; transition: border-color .15s;
+}
+.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--blue); background: #fff; }
+.field textarea { resize: vertical; min-height: 72px; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding-top: 4px; }
+
+/* ── Quote Screen ── */
+.back-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; color: var(--text-muted); cursor: pointer;
+  margin-bottom: 20px; background: none; border: none; font-family: inherit;
+}
+.back-link:hover { color: var(--blue); }
+.client-header {
+  background: var(--navy); border-radius: var(--radius);
+  padding: 20px 24px; margin-bottom: 24px;
+  display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center;
+}
+.ch-left .name { font-size: 20px; font-weight: 600; color: #fff; font-family: 'DM Sans', sans-serif; }
+.ch-left .site { font-size: 13px; color: rgba(255,255,255,.55); margin-top: 2px; }
+.ch-meta { display: flex; gap: 20px; margin-top: 12px; flex-wrap: wrap; }
+.ch-meta-item { font-size: 12px; color: rgba(255,255,255,.5); }
+.ch-meta-item span { color: rgba(255,255,255,.85); font-weight: 500; }
+.ch-right { text-align: right; }
+.ch-budget { font-size: 28px; font-weight: 700; color: var(--accent); font-family: 'DM Sans', sans-serif; }
+.ch-budget-lbl { font-size: 11px; color: rgba(255,255,255,.4); margin-top: 2px; }
+.ch-memo { background: rgba(212,168,67,.15); border-radius: var(--radius-sm); padding: 8px 12px; margin-top: 12px; font-size: 12px; color: rgba(255,255,255,.7); border-left: 3px solid var(--accent); }
+
+.kw-section {
+  background: var(--bg-card); border-radius: var(--radius);
+  border: 1px solid var(--border); padding: 20px 24px;
+  margin-bottom: 20px; box-shadow: var(--shadow);
+}
+.kw-section h3 { font-size: 13px; font-weight: 600; color: var(--text-muted); letter-spacing: .4px; text-transform: uppercase; margin-bottom: 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.chip {
+  font-size: 12px; padding: 4px 12px; border-radius: 20px;
+  border: 1px solid var(--border); background: var(--bg);
+  color: var(--text-muted); cursor: pointer; transition: all .15s;
+}
+.chip:hover { background: var(--blue-light); color: var(--blue); border-color: var(--blue); }
+.kw-input-row { display: flex; gap: 10px; align-items: flex-start; }
+.kw-input-row textarea {
+  flex: 1; padding: 10px 14px; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--bg); color: var(--text);
+  font-size: 13px; resize: vertical; min-height: 80px;
+  line-height: 1.6; font-family: inherit; outline: none; transition: border-color .15s;
+}
+.kw-input-row textarea:focus { border-color: var(--blue); background: #fff; }
+.status-bar {
+  font-size: 12px; color: var(--text-muted); padding: 8px 0;
+  min-height: 32px; display: flex; align-items: center;
+}
+.status-bar.loading { color: var(--blue); }
+.status-bar.error { color: var(--danger); }
+.status-bar.success { color: var(--success); }
+
+/* ── Sections ── */
+.sec-card {
+  background: var(--bg-card); border-radius: var(--radius);
+  border: 1px solid var(--border); margin-bottom: 12px;
+  box-shadow: var(--shadow); overflow: hidden;
+}
+.sec-header {
+  display: flex; align-items: center; padding: 12px 18px;
+  cursor: pointer; user-select: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+.sec-header:hover { background: var(--blue-light); }
+.sec-name { font-size: 13px; font-weight: 600; flex: 1; color: var(--text); }
+.sec-total { font-size: 14px; font-weight: 600; color: var(--blue); font-family: 'DM Sans', sans-serif; }
+.sec-chevron { font-size: 11px; color: var(--text-light); margin-left: 10px; transition: transform .2s; }
+.sec-chevron.open { transform: rotate(180deg); }
+.sec-body { display: none; }
+.sec-body.open { display: block; }
+.col-header {
+  display: grid; grid-template-columns: 1fr 80px 100px 100px 32px;
+  gap: 6px; padding: 8px 18px;
+  border-bottom: 1px solid var(--border);
+  background: #FAFBFC;
+}
+.col-header span { font-size: 10px; font-weight: 600; color: var(--text-light); letter-spacing: .4px; text-transform: uppercase; }
+.item-row {
+  display: grid; grid-template-columns: 1fr 80px 100px 100px 32px;
+  gap: 6px; align-items: center; padding: 8px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.item-row:last-child { border-bottom: none; }
+.item-row:hover { background: var(--bg); }
+.item-name-text { font-size: 13px; color: var(--text); line-height: 1.3; }
+.item-note-text { font-size: 11px; color: var(--text-light); margin-top: 1px; }
+.qty-wrap { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
+.qty-wrap input { width: 44px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px; background: #fff; color: var(--text); font-size: 12px; text-align: right; font-family: inherit; }
+.qty-wrap input:focus { border-color: var(--blue); outline: none; }
+.unit-lbl { font-size: 10px; color: var(--text-light); white-space: nowrap; }
+.price-input { width: 100%; padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; background: #fff; color: var(--text); font-size: 12px; text-align: right; font-family: 'DM Sans', sans-serif; }
+.price-input:focus { border-color: var(--blue); outline: none; }
+.item-amount { font-size: 13px; font-weight: 500; text-align: right; color: var(--text); font-family: 'DM Sans', sans-serif; }
+.del-btn {
+  width: 28px; height: 28px; border: none; background: transparent;
+  color: var(--text-light); cursor: pointer; border-radius: 4px;
+  font-size: 16px; display: flex; align-items: center; justify-content: center;
+}
+.del-btn:hover { background: var(--danger-bg); color: var(--danger); }
+
+/* ── Totals ── */
+.totals-card {
+  background: var(--navy); border-radius: var(--radius);
+  padding: 20px 24px; margin-top: 16px;
+}
+.total-row { display: flex; justify-content: space-between; padding: 5px 0; }
+.total-row .lbl { font-size: 13px; color: rgba(255,255,255,.55); }
+.total-row .amt { font-size: 14px; color: rgba(255,255,255,.8); font-family: 'DM Sans', sans-serif; font-weight: 500; }
+.total-divider { border: none; border-top: 1px solid rgba(255,255,255,.12); margin: 10px 0; }
+.total-grand { display: flex; justify-content: space-between; align-items: center; }
+.total-grand .lbl { font-size: 14px; color: rgba(255,255,255,.7); font-weight: 500; }
+.total-grand .amt { font-size: 28px; color: var(--accent); font-family: 'DM Sans', sans-serif; font-weight: 700; }
+
+.empty-state {
+  padding: 48px; text-align: center; color: var(--text-light); font-size: 14px;
+}
+.empty-state .icon { font-size: 36px; margin-bottom: 12px; }
+.empty-state .title { font-size: 16px; font-weight: 500; color: var(--text-muted); margin-bottom: 6px; }
+
+/* ── Toast ── */
+.toast {
+  position: fixed; bottom: 24px; right: 24px;
+  background: var(--navy); color: #fff; padding: 12px 20px;
+  border-radius: var(--radius-sm); font-size: 13px;
+  box-shadow: var(--shadow-lg); z-index: 999;
+  transform: translateY(80px); opacity: 0;
+  transition: all .3s; pointer-events: none;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div class="sidebar">
+  <div class="sidebar-logo">
+    <div class="brand">Re:<span>Mansion</span></div>
+    <div class="sub">案件管理システム</div>
+  </div>
+  <div class="nav-items">
+    <div class="nav-item active" id="nav-crm" onclick="showScreen('crm')">
+      <span class="icon">📋</span> 案件管理
+    </div>
+    <div class="nav-item" id="nav-quote" onclick="showScreen('quote')">
+      <span class="icon">📝</span> 見積作成
+    </div>
+  </div>
+  <div class="sidebar-bottom">
+    <div id="syncStatus" style="font-size:11px;color:rgba(255,255,255,.35);text-align:center;margin-bottom:6px;line-height:1.4;min-height:16px"></div>
+    <div class="version">Re:Mansion v1.0 — GS連携中</div>
+  </div>
+</div>
+
+<!-- Main -->
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title" id="topbarTitle">案件管理</div>
+    <div class="topbar-actions">
+      <button class="btn btn-outline btn-sm" onclick="exportCases()">📊 案件一覧を出力</button>
+      <button class="btn btn-primary btn-sm" onclick="openModal()" id="addBtn">＋ 新規案件</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <!-- CRM Screen -->
+    <div class="screen show" id="screen-crm">
+      <div class="stats-grid" id="statsGrid"></div>
+      <div class="table-card">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <span style="color:var(--text-light)">🔍</span>
+            <input id="searchInput" placeholder="お客様名・物件名で検索..." oninput="renderTable()"/>
+          </div>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>お客様名</th>
+                <th>区分</th>
+                <th>問い合わせ日</th>
+                <th>担当者</th>
+                <th>概算予算</th>
+                <th>ステータス</th>
+                <th>メモ</th>
+                <th style="width:140px"></th>
+              </tr>
+            </thead>
+            <tbody id="tblBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quote Screen -->
+    <div class="screen" id="screen-quote">
+      <button class="back-link" onclick="showScreen('crm')">← 案件一覧に戻る</button>
+      <div class="client-header" id="clientHeader"></div>
+
+      <div class="kw-section">
+        <h3>要望キーワード入力</h3>
+        <div class="chips" id="chips"></div>
+        <div class="kw-input-row">
+          <textarea id="kwInput" placeholder="例）玄関ミラー、ダウンライト、アクセントクロス、フロートTVボード&#10;壁掛けTV、間接照明コーニス、タイル壁、エコカラット&#10;&#10;お客様の要望を自由に入力してください"></textarea>
+          <button class="btn btn-accent btn-lg" id="genBtn" onclick="generateQuote()">AIで展開</button>
+        </div>
+        <div class="status-bar" id="statusBar"></div>
+      </div>
+
+      <div id="sectionsWrap"></div>
+
+      <div class="totals-card" id="totalsCard" style="display:none">
+        <div class="total-row"><span class="lbl">小計（税抜）</span><span class="amt" id="subDisp">¥0</span></div>
+        <div class="total-row"><span class="lbl">値引き</span><span class="amt" id="discDisp">—</span></div>
+        <hr class="total-divider">
+        <div class="total-grand"><span class="lbl">合計（税込 10%）</span><span class="amt" id="grandDisp">¥0</span></div>
+      </div>
+
+      <button class="btn btn-primary btn-lg btn-block" id="xlBtn" onclick="exportXL()" style="display:none;margin-top:16px">
+        📥 Excelで出力する
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modalTitle">新規案件登録</h2>
+      <p id="modalSub">問い合わせ情報を入力してください</p>
+    </div>
+    <div class="form-grid">
+      <div class="field full"><label>お客様名 *</label><input id="f-name" placeholder="例）山田 太郎 様"/></div>
+      <div class="field full"><label>物件名（マンション名）</label><input id="f-site" placeholder="例）パークタワー〇〇"/></div>
+      <div class="field"><label>区分 *</label>
+        <select id="f-type">
+          <option value="新築リノベ">新築リノベ</option>
+          <option value="中古リノベ">中古リノベ</option>
+        </select>
+      </div>
+      <div class="field"><label>ステータス</label>
+        <select id="f-status">
+          <option value="問い合わせ">問い合わせ</option>
+          <option value="見積済み">見積済み</option>
+          <option value="受注">受注</option>
+          <option value="失注">失注</option>
+        </select>
+      </div>
+      <div class="field"><label>問い合わせ日</label><input id="f-date" type="date"/></div>
+      <div class="field"><label>担当者</label><input id="f-staff" placeholder="例）山田"/></div>
+      <div class="field"><label>概算予算（万円）</label><input id="f-budget" type="number" placeholder="例）1500"/></div>
+      <div class="field"><label>実績金額（万円）</label><input id="f-actual" type="number" placeholder="受注後に入力"/></div>
+      <div class="field full"><label>メモ・要望</label><textarea id="f-memo" placeholder="お客様の要望・特記事項"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveCase()">保存する</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Data ──
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbyx7qicepqzmhlNLDAbsIV-B_oZomvrXiVpP8B8bts0Lzm2KsuMu2ls8lzP65ysiXmZ/exec';
+let cases = [];
+let editId = null;
+let currentCase = null;
+let sections = {};
+let isSyncing = false;
+
+function showSyncStatus(msg, type) {
+  const el = document.getElementById('syncStatus');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = type === 'error' ? 'var(--danger)' : type === 'ok' ? 'var(--success)' : 'var(--text-muted)';
+}
+
+async function loadCases() {
+  showSyncStatus('Googleスプレッドシートから読み込み中...', '');
+  try {
+    const res = await fetch(GAS_URL + '?action=getAll', { method: 'GET' });
+    const data = await res.json();
+    if (data.success) {
+      showSyncStatus('最終同期：' + new Date().toLocaleTimeString('ja-JP'), 'ok');
+      return data.data || [];
+    }
+    throw new Error(data.error);
+  } catch(e) {
+    showSyncStatus('読み込みエラー：' + e.message, 'error');
+    return [];
+  }
+}
+
+async function saveCase_GAS(c) {
+  isSyncing = true;
+  showSyncStatus('保存中...', '');
+  try {
+    const res = await fetch(GAS_URL + '?action=save&case=' + encodeURIComponent(JSON.stringify(c)), { method: 'GET' });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    showSyncStatus('保存完了：' + new Date().toLocaleTimeString('ja-JP'), 'ok');
+  } catch(e) {
+    showSyncStatus('保存エラー：' + e.message, 'error');
+    toast('⚠️ 保存に失敗しました：' + e.message);
+  }
+  isSyncing = false;
+}
+
+async function deleteCase_GAS(id) {
+  showSyncStatus('削除中...', '');
+  try {
+    const res = await fetch(GAS_URL + '?action=delete&id=' + encodeURIComponent(id), { method: 'GET' });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    showSyncStatus('削除完了：' + new Date().toLocaleTimeString('ja-JP'), 'ok');
+  } catch(e) {
+    showSyncStatus('削除エラー：' + e.message, 'error');
+  }
+}
+
+async function init() {
+  cases = await loadCases();
+  renderStats();
+  renderTable();
+}
+
+// ── Toast ──
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ── Screens ──
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('show');
+  document.getElementById('nav-' + name).classList.add('active');
+  const titles = { crm: '案件管理', quote: '見積作成' };
+  document.getElementById('topbarTitle').textContent = titles[name] || '';
+  document.getElementById('addBtn').style.display = name === 'crm' ? '' : 'none';
+  if (name === 'crm') { renderStats(); renderTable(); }
+}
+
+// ── Stats ──
+function renderStats() {
+  const total = cases.length;
+  const inq = cases.filter(c => c.status === '問い合わせ').length;
+  const ordered = cases.filter(c => c.status === '受注').length;
+  const budgetSum = cases.filter(c => c.budget).reduce((s, c) => s + Number(c.budget), 0);
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-card"><div class="lbl">総案件数</div><div class="val">${total}</div><div class="sub">登録済み案件</div></div>
+    <div class="stat-card"><div class="lbl">問い合わせ中</div><div class="val">${inq}</div><div class="sub">対応待ち</div></div>
+    <div class="stat-card"><div class="lbl">受注件数</div><div class="val">${ordered}</div><div class="sub">成約済み</div></div>
+    <div class="stat-card accent"><div class="lbl">概算予算合計</div><div class="val">${budgetSum >= 10000 ? (budgetSum/10000).toFixed(1)+'億' : (budgetSum/100).toFixed(1)+'百万'}円</div><div class="sub">全案件合算</div></div>
+  `;
+}
+
+// ── Table ──
+const statusBadge = { '問い合わせ': 'badge-new', '見積済み': 'badge-quote', '受注': 'badge-order', '失注': 'badge-lost' };
+function renderTable() {
+  const q = (document.getElementById('searchInput').value || '').toLowerCase();
+  const filtered = cases.filter(c => !q || (c.name + c.site).toLowerCase().includes(q));
+  const tbody = document.getElementById('tblBody');
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="icon">📭</div><div class="title">案件がありません</div>「＋ 新規案件」から追加してください</div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = filtered.map(c => `
+    <tr onclick="goQuote('${c.id}')">
+      <td>
+        <div class="td-name">${c.name}</div>
+        <div class="td-site">${c.site || '—'}</div>
+      </td>
+      <td><span class="badge ${c.type === '新築リノベ' ? 'badge-shin' : 'badge-chu'}">${c.type}</span></td>
+      <td class="td-meta">${c.date || '—'}</td>
+      <td class="td-meta">${c.staff || '—'}</td>
+      <td class="td-budget">${c.budget ? '¥' + Number(c.budget).toLocaleString() + '万' : '—'}</td>
+      <td><span class="badge ${statusBadge[c.status] || 'badge-new'}">${c.status}</span></td>
+      <td class="td-meta" style="max-width:140px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${c.memo || ''}</td>
+      <td onclick="event.stopPropagation()">
+        <div class="row-actions">
+          <button class="btn btn-primary btn-sm" onclick="goQuote('${c.id}')">見積</button>
+          <button class="btn btn-outline btn-sm" onclick="openModal('${c.id}')">編集</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteCase('${c.id}')">削除</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+// ── Modal ──
+function openModal(id = null) {
+  editId = id;
+  const today = new Date().toISOString().slice(0, 10);
+  document.getElementById('modalTitle').textContent = id ? '案件を編集' : '新規案件登録';
+  document.getElementById('modalSub').textContent = id ? '内容を更新してください' : '問い合わせ情報を入力してください';
+  if (id) {
+    const c = cases.find(x => x.id === id);
+    if (!c) return;
+    document.getElementById('f-name').value = c.name || '';
+    document.getElementById('f-site').value = c.site || '';
+    document.getElementById('f-type').value = c.type || '新築リノベ';
+    document.getElementById('f-status').value = c.status || '問い合わせ';
+    document.getElementById('f-date').value = c.date || today;
+    document.getElementById('f-staff').value = c.staff || '';
+    document.getElementById('f-budget').value = c.budget || '';
+    document.getElementById('f-actual').value = c.actual || '';
+    document.getElementById('f-memo').value = c.memo || '';
+  } else {
+    ['f-name','f-site','f-staff','f-memo'].forEach(id => document.getElementById(id).value = '');
+    ['f-budget','f-actual'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('f-type').value = '新築リノベ';
+    document.getElementById('f-status').value = '問い合わせ';
+    document.getElementById('f-date').value = today;
+  }
+  document.getElementById('overlay').classList.add('show');
+}
+function closeModal() { document.getElementById('overlay').classList.remove('show'); editId = null; }
+async function saveCase() {
+  const name = document.getElementById('f-name').value.trim();
+  if (!name) { alert('お客様名は必須です'); return; }
+  const obj = {
+    id: editId || ('c' + Date.now()),
+    name,
+    site: document.getElementById('f-site').value.trim(),
+    type: document.getElementById('f-type').value,
+    status: document.getElementById('f-status').value,
+    date: document.getElementById('f-date').value,
+    staff: document.getElementById('f-staff').value.trim(),
+    budget: document.getElementById('f-budget').value,
+    actual: document.getElementById('f-actual').value,
+    memo: document.getElementById('f-memo').value.trim(),
+  };
+  cases = editId ? cases.map(c => c.id === editId ? obj : c) : [obj, ...cases];
+  closeModal();
+  renderStats();
+  renderTable();
+  toast(editId ? '案件を更新しました' : '案件を登録しました');
+  await saveCase_GAS(obj);
+}
+async function deleteCase(id) {
+  if (!confirm('この案件を削除しますか？')) return;
+  cases = cases.filter(c => c.id !== id);
+  renderStats();
+  renderTable();
+  toast('削除しました');
+  await deleteCase_GAS(id);
+}
+
+// ── Export Cases ──
+function exportCases() {
+  const rows = [['お客様名','物件名','区分','問い合わせ日','担当者','概算予算（万円）','実績金額（万円）','ステータス','メモ']];
+  cases.forEach(c => rows.push([c.name,c.site,c.type,c.date,c.staff,c.budget,c.actual,c.status,c.memo]));
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:16},{wch:24},{wch:10},{wch:12},{wch:8},{wch:12},{wch:12},{wch:10},{wch:30}];
+  XLSX.utils.book_append_sheet(wb, ws, '案件一覧');
+  XLSX.writeFile(wb, 'Remansion_案件一覧_' + new Date().toISOString().slice(0,10) + '.xlsx');
+}
+
+// ── Quote ──
+const CHIPS_S = ['玄関ミラー','ダウンライト','アクセントクロス','フロートTVボード','壁掛けTV','タイル壁','間接照明コーニス','間接照明コーブ','エコカラット','フローリング','カップボード','ベッドヘッド造作','玄関リブパネル','造作洗面台'];
+const CHIPS_C = ['玄関ミラー','ダウンライト','アクセントクロス','フロートTVボード','壁掛けTV','タイル壁','間接照明コーニス','エコカラット','カップボード','フロアタイル','バーチカルブラインド','ダイノックシート扉','間接照明コーブ'];
+
+const MASTER = {
+  '玄関ミラー':{sec:'内装工事',items:[{name:'玄関ミラー（クリアミラー）材料費',unit:'式',qty:1,price:48000,note:'W450H2200程度'},{name:'同上取付施工費（ミラーマット・ボンド含む）',unit:'式',qty:1,price:52000}]},
+  'ダウンライト':{sec:'電気工事',items:[{name:'LEDグレアレスダウンライト 60W',unit:'箇所',qty:10,price:9000,note:'概算・調光仕様'},{name:'電灯配線工事',unit:'箇所',qty:10,price:6000},{name:'器具接続工事',unit:'箇所',qty:10,price:4500}]},
+  'アクセントクロス':{sec:'内装工事',items:[{name:'ベースクロス貼り替え（全室・天井含む）',unit:'式',qty:1,price:500000,note:'概算・材工共'},{name:'アクセントクロスパネル貼り（各所）',unit:'式',qty:1,price:150000,note:'概算・材工共'},{name:'工事に伴うパテ処理・下地補修',unit:'式',qty:1,price:45000}]},
+  'フロートTVボード':{sec:'造作家具',items:[{name:'TVボード造作（フロート）W1800〜 メラミン化粧板',unit:'式',qty:1,price:260000,note:'概算'},{name:'同上家具施工費',unit:'式',qty:1,price:85000}]},
+  '壁掛けTV':{sec:'大工（造作）工事',items:[{name:'TV掛け箇所 下地補強工事',unit:'式',qty:1,price:39000},{name:'TV掛け金物取付（施主様支給）',unit:'式',qty:1,price:27000},{name:'壁中配線ルート確保',unit:'式',qty:1,price:24000}]},
+  'タイル壁':{sec:'内装工事',items:[{name:'磁器質タイル材料費（品番未定）',unit:'㎡',qty:12,price:22000,note:'概算'},{name:'同上ボンド及び目地材',unit:'㎡',qty:12,price:6500},{name:'同上タイル施工費',unit:'㎡',qty:12,price:20000},{name:'タイル下地補強工事',unit:'式',qty:1,price:60000}]},
+  '間接照明コーニス':{sec:'大工（造作）工事',items:[{name:'コーニス照明造作工事',unit:'式',qty:1,price:180000,note:'概算'}],items2:[{name:'コーニス間接照明 L1500（調光）',unit:'台',qty:3,price:16600,sec:'電気工事'},{name:'電灯配線・器具接続工事',unit:'式',qty:1,price:63000,sec:'電気工事'}]},
+  '間接照明コーブ':{sec:'大工（造作）工事',items:[{name:'コーブ照明造作（折り上げ天井等）',unit:'式',qty:1,price:200000,note:'概算'}],items2:[{name:'コーブ間接照明 L1500（調光）',unit:'台',qty:3,price:16600,sec:'電気工事'},{name:'電灯配線・器具接続工事',unit:'式',qty:1,price:63000,sec:'電気工事'}]},
+  'エコカラット':{sec:'内装工事',items:[{name:'エコカラット材料費（品番未定）',unit:'式',qty:1,price:167000,note:'概算'},{name:'同上ボンド及びコーク',unit:'式',qty:1,price:23800},{name:'同上施工費',unit:'式',qty:1,price:120000}]},
+  'フローリング':{sec:'大工（造作）工事',items:[{name:'フローリング材料費（品番未定）',unit:'ケース',qty:14,price:19000,note:'概算'},{name:'同上フローリング施工費（ボンド・副資材含む）',unit:'㎡',qty:50,price:4500},{name:'巾木工事',unit:'式',qty:1,price:93000}]},
+  'カップボード':{sec:'造作家具',items:[{name:'カップボード造作 W2000〜 メラミン扉仕様',unit:'式',qty:1,price:800000,note:'概算'},{name:'同上家具施工費',unit:'式',qty:1,price:85000}]},
+  'ベッドヘッド造作':{sec:'造作家具',items:[{name:'ベッドヘッド造作 メラミン化粧板仕上げ',unit:'式',qty:1,price:380000,note:'概算'},{name:'同上家具施工費',unit:'式',qty:1,price:75000}]},
+  '玄関リブパネル':{sec:'内装工事',items:[{name:'玄関リブパネル材料費 W917H2000',unit:'式',qty:1,price:103000},{name:'同上塗装費',unit:'式',qty:1,price:82000},{name:'同上施工費',unit:'式',qty:1,price:80000}]},
+  '造作洗面台':{sec:'設備工事',items:[{name:'造作オーダー洗面化粧台 W1200〜（予算取り）',unit:'式',qty:1,price:1000000,note:'概算'},{name:'同上排水金具',unit:'式',qty:1,price:23000},{name:'同上取付費',unit:'式',qty:1,price:75000}]},
+  'フロアタイル':{sec:'大工（造作）工事',items:[{name:'フロアタイル材料費（品番未定）',unit:'㎡',qty:30,price:9000,note:'概算'},{name:'同上下地捨て貼り工事',unit:'㎡',qty:30,price:4000},{name:'フロアタイル施工費',unit:'式',qty:1,price:60000},{name:'ソフト巾木工事',unit:'式',qty:1,price:30000}]},
+  'バーチカルブラインド':{sec:'内装工事',items:[{name:'バーチカルブラインド材料費（タチカワ等）',unit:'式',qty:1,price:180000,note:'概算'},{name:'同上採寸・取付工事費',unit:'式',qty:1,price:40000}]},
+  'ダイノックシート扉':{sec:'内装工事',items:[{name:'ドア・枠 ダイノックシート貼り（大）',unit:'枚',qty:4,price:65000},{name:'同上施工費',unit:'式',qty:1,price:120000,note:'概算'}]},
+  '仮設':{sec:'仮設工事',items:[{name:'運搬搬入費',unit:'式',qty:1,price:90000},{name:'養生費（エコフルガード・緩衝床養生シート等）',unit:'式',qty:1,price:75000},{name:'発生材処分費',unit:'式',qty:1,price:60000},{name:'引き渡し清掃および清掃前引上げ作業費含む',unit:'式',qty:1,price:75000}]},
+  '諸経費':{sec:'諸経費・現場管理費',items:[{name:'諸経費（現場経費・会社経費・図面作成費・内覧会同行費）',unit:'式',qty:1,price:500000,note:'工事内容により変動'},{name:'現場管理費',unit:'式',qty:1,price:300000}]},
+};
+
+const KW_MAP = [
+  {p:['玄関ミラー','ミラー','鏡'],k:'玄関ミラー'},
+  {p:['ダウンライト','照明'],k:'ダウンライト'},
+  {p:['アクセントクロス','クロス','壁紙'],k:'アクセントクロス'},
+  {p:['フロートtvボード','フロートtv','tvボード','テレビボード','tv台'],k:'フロートTVボード'},
+  {p:['壁掛けtv','tv壁掛け','壁掛けテレビ'],k:'壁掛けTV'},
+  {p:['タイル壁','壁タイル','タイル'],k:'タイル壁'},
+  {p:['コーニス'],k:'間接照明コーニス'},
+  {p:['コーブ'],k:'間接照明コーブ'},
+  {p:['間接照明'],k:'間接照明コーニス'},
+  {p:['エコカラット'],k:'エコカラット'},
+  {p:['フローリング','床材'],k:'フローリング'},
+  {p:['カップボード','食器棚'],k:'カップボード'},
+  {p:['ベッドヘッド'],k:'ベッドヘッド造作'},
+  {p:['リブパネル'],k:'玄関リブパネル'},
+  {p:['造作洗面','オーダー洗面'],k:'造作洗面台'},
+  {p:['フロアタイル','床タイル'],k:'フロアタイル'},
+  {p:['バーチカル','ブラインド'],k:'バーチカルブラインド'},
+  {p:['ダイノック','シート貼'],k:'ダイノックシート扉'},
+];
+
+const SEC_ORDER = ['仮設工事','解体工事','設備工事','造作家具','大工（造作）工事','内装建具工事','内装工事','電気工事','諸経費・現場管理費'];
+
+function goQuote(id) {
+  currentCase = cases.find(c => c.id === id);
+  if (!currentCase) return;
+  sections = {};
+  document.getElementById('kwInput').value = '';
+  document.getElementById('statusBar').textContent = '';
+  document.getElementById('statusBar').className = 'status-bar';
+  document.getElementById('sectionsWrap').innerHTML = `
+    <div class="empty-state">
+      <div class="icon">✍️</div>
+      <div class="title">キーワードを入力してください</div>
+      お客様の要望を入力して「AIで展開」を押すと品目が自動生成されます
+    </div>`;
+  document.getElementById('totalsCard').style.display = 'none';
+  document.getElementById('xlBtn').style.display = 'none';
+
+  const chips = currentCase.type === '新築リノベ' ? CHIPS_S : CHIPS_C;
+  document.getElementById('chips').innerHTML = chips.map(c =>
+    `<span class="chip" onclick="addChip('${c}')">${c}</span>`).join('');
+
+  const budget = currentCase.budget ? `¥${Number(currentCase.budget).toLocaleString()}万` : '未設定';
+  document.getElementById('clientHeader').innerHTML = `
+    <div class="ch-left">
+      <div class="name">${currentCase.name}</div>
+      <div class="site">${currentCase.site || ''}</div>
+      <div class="ch-meta">
+        <div class="ch-meta-item">区分 <span>${currentCase.type}</span></div>
+        <div class="ch-meta-item">担当 <span>${currentCase.staff || '—'}</span></div>
+        <div class="ch-meta-item">問い合わせ <span>${currentCase.date || '—'}</span></div>
+        <div class="ch-meta-item">ステータス <span>${currentCase.status}</span></div>
+      </div>
+      ${currentCase.memo ? `<div class="ch-memo">📝 ${currentCase.memo}</div>` : ''}
+    </div>
+    <div class="ch-right">
+      <div class="ch-budget">${budget}</div>
+      <div class="ch-budget-lbl">概算予算</div>
+    </div>`;
+
+  if (currentCase.memo) {
+    document.getElementById('kwInput').value = currentCase.memo;
+  }
+
+  showScreen('quote');
+}
+
+function addChip(t) {
+  const ta = document.getElementById('kwInput');
+  ta.value = ta.value.trim() ? ta.value.trim() + '\n' + t : t;
+}
+
+function setStatus(msg, type = '') {
+  const el = document.getElementById('statusBar');
+  el.textContent = msg;
+  el.className = 'status-bar' + (type ? ' ' + type : '');
+}
+
+async function generateQuote() {
+  const kw = document.getElementById('kwInput').value.trim();
+  if (!kw) { setStatus('キーワードを入力してください', 'error'); return; }
+  const btn = document.getElementById('genBtn');
+  btn.disabled = true;
+  setStatus('AIが解析中...', 'loading');
+  sections = {};
+
+  const sys = `あなたはリノベーション会社Re:Mansionの見積アシスタントです。
+ユーザーが入力したキーワードから必要な工事項目を特定し、以下のキーから該当するものを返してください。
+利用可能なキー: 玄関ミラー, ダウンライト, アクセントクロス, フロートTVボード, 壁掛けTV, タイル壁, 間接照明コーニス, 間接照明コーブ, エコカラット, フローリング, カップボード, ベッドヘッド造作, 玄関リブパネル, 造作洗面台, フロアタイル, バーチカルブラインド, ダイノックシート扉
+必ず仮設と諸経費も含めてください。
+{"keys":["キー1","キー2",...]} の形式のみで返答。`;
+
+  let keys = [];
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 400, system: sys, messages: [{ role: 'user', content: kw }] })
+    });
+    const data = await res.json();
+    const text = data.content?.find(b => b.type === 'text')?.text || '{}';
+    keys = JSON.parse(text.replace(/```json|```/g, '').trim()).keys || [];
+  } catch(e) {
+    keys = parseLocal(kw);
+  }
+  if (!keys.length) keys = parseLocal(kw);
+
+  buildSections(keys);
+  renderSections();
+  setStatus(`${keys.length}件の工種を展開しました。数量・単価を確認して調整してください。`, 'success');
+  btn.disabled = false;
+
+  if (currentCase) {
+    currentCase.status = '見積済み';
+    cases = cases.map(c => c.id === currentCase.id ? currentCase : c);
+    await saveCase_GAS(currentCase);
+  }
+}
+
+function parseLocal(text) {
+  const t = text.toLowerCase();
+  const found = new Set();
+  KW_MAP.forEach(m => { if (m.p.some(p => t.includes(p.toLowerCase()))) found.add(m.k); });
+  found.add('仮設'); found.add('諸経費');
+  return [...found];
+}
+
+function buildSections(keys) {
+  sections = {};
+  keys.forEach(k => {
+    const m = MASTER[k]; if (!m) return;
+    const add = (items, sn) => {
+      if (!sections[sn]) sections[sn] = [];
+      items.forEach(it => sections[sn].push({ ...it, id: Math.random().toString(36).slice(2) }));
+    };
+    add(m.items, m.sec);
+    if (m.items2) m.items2.forEach(it => add([it], it.sec || m.sec));
+  });
+  const ord = {};
+  SEC_ORDER.forEach(s => { if (sections[s]) ord[s] = sections[s]; });
+  Object.keys(sections).forEach(s => { if (!ord[s]) ord[s] = sections[s]; });
+  sections = ord;
+}
+
+const fmt = n => '¥' + Math.round(n).toLocaleString('ja-JP');
+const secTotal = s => (sections[s] || []).reduce((t, i) => t + (parseFloat(i.qty) || 0) * (parseFloat(i.price) || 0), 0);
+const grandSub = () => Object.keys(sections).reduce((t, s) => t + secTotal(s), 0);
+
+function updateTotals() {
+  const sub = grandSub(), disc = Math.round(sub * 0.005), grand = Math.round((sub - disc) * 1.1);
+  document.getElementById('subDisp').textContent = fmt(sub);
+  document.getElementById('discDisp').textContent = disc > 0 ? '-' + fmt(disc) : '—';
+  document.getElementById('grandDisp').textContent = fmt(grand);
+  Object.keys(sections).forEach(s => {
+    const el = document.getElementById('sub_' + s.replace(/[（）\s]/g, '_'));
+    if (el) el.textContent = fmt(secTotal(s));
+  });
+}
+
+function renderSections() {
+  const wrap = document.getElementById('sectionsWrap');
+  wrap.innerHTML = '';
+  if (!Object.keys(sections).length) return;
+  Object.keys(sections).forEach(sn => {
+    const items = sections[sn];
+    const sid = sn.replace(/[（）\s]/g, '_');
+    const div = document.createElement('div');
+    div.className = 'sec-card';
+    div.innerHTML = `
+      <div class="sec-header" onclick="toggleSec('sb_${sid}','chev_${sid}')">
+        <span class="sec-name">${sn}</span>
+        <span class="sec-total" id="sub_${sid}">${fmt(secTotal(sn))}</span>
+        <span class="sec-chevron open" id="chev_${sid}">▲</span>
+      </div>
+      <div class="sec-body open" id="sb_${sid}">
+        <div class="col-header">
+          <span>品名</span>
+          <span style="text-align:right">数量 / 単位</span>
+          <span style="text-align:right">単価（円）</span>
+          <span style="text-align:right">金額（円）</span>
+          <span></span>
+        </div>
+        ${items.map(it => `
+        <div class="item-row">
+          <div>
+            <div class="item-name-text">${it.name}</div>
+            ${it.note ? `<div class="item-note-text">${it.note}</div>` : ''}
+          </div>
+          <div class="qty-wrap">
+            <input type="number" value="${it.qty}" min="0" step="0.1" onchange="upd('${sn}','${it.id}','qty',this.value)">
+            <span class="unit-lbl">${it.unit}</span>
+          </div>
+          <input class="price-input" type="number" value="${it.price}" min="0" onchange="upd('${sn}','${it.id}','price',this.value)">
+          <div class="item-amount" id="a_${it.id}">${fmt((parseFloat(it.qty)||0)*(parseFloat(it.price)||0))}</div>
+          <button class="del-btn" onclick="delItem('${sn}','${it.id}')">×</button>
+        </div>`).join('')}
+      </div>`;
+    wrap.appendChild(div);
+  });
+  document.getElementById('totalsCard').style.display = 'block';
+  document.getElementById('xlBtn').style.display = 'block';
+  updateTotals();
+}
+
+function toggleSec(bodyId, chevId) {
+  document.getElementById(bodyId).classList.toggle('open');
+  document.getElementById(chevId).classList.toggle('open');
+}
+function upd(sn, id, f, v) {
+  const it = sections[sn]?.find(i => i.id === id); if (!it) return;
+  it[f] = parseFloat(v) || 0;
+  const el = document.getElementById('a_' + id);
+  if (el) el.textContent = fmt((parseFloat(it.qty)||0)*(parseFloat(it.price)||0));
+  updateTotals();
+}
+function delItem(sn, id) {
+  sections[sn] = sections[sn].filter(i => i.id !== id);
+  if (!sections[sn].length) delete sections[sn];
+  renderSections();
+}
+
+function exportXL() {
+  if (!currentCase) return;
+  const sub = grandSub(), disc = Math.round(sub * 0.005), taxable = sub - disc, tax = Math.round(taxable * 0.1), grand = taxable + tax;
+  const today = new Date();
+  const dateStr = `令和${today.getFullYear()-2018}年${today.getMonth()+1}月${today.getDate()}日`;
+  const rows = [
+    ['','概算御見積書','','','','',''],
+    ['','','','','','',''],
+    ['工事名称','：',currentCase.name+'邸リマンション工事','','','',''],
+    ['工事場所','：',currentCase.site||'','','発行日：',dateStr,''],
+    ['支払条件','：','相談','','担当者：',currentCase.staff||'',''],
+    ['見積期限','：','1ヶ月','','区分：',currentCase.type,''],
+    ['','','','','','',''],
+    ['税込工事金額','','','¥'+grand.toLocaleString('ja-JP'),'','',''],
+    ['内消費税','','','','','¥'+tax.toLocaleString('ja-JP'),''],
+    ['','','','','','',''],
+    ['工種','品名','数量','単位','単価','金額','備考'],
+  ];
+  Object.keys(sections).forEach(s => {
+    rows.push([s,'','','','','','']);
+    sections[s].forEach(it => rows.push(['',it.name,parseFloat(it.qty)||0,it.unit,parseFloat(it.price)||0,(parseFloat(it.qty)||0)*(parseFloat(it.price)||0),it.note||'']));
+    rows.push(['','','','','小計','¥'+Math.round(secTotal(s)).toLocaleString('ja-JP'),'']);
+    rows.push(['','','','','','','']);
+  });
+  rows.push(['','','','','小計（税抜）','¥'+Math.round(sub).toLocaleString('ja-JP'),'']);
+  rows.push(['','','','','値引き','-¥'+disc.toLocaleString('ja-JP'),'']);
+  rows.push(['','','','','消費税（10%）','¥'+tax.toLocaleString('ja-JP'),'']);
+  rows.push(['','','','','合計（税込）','¥'+grand.toLocaleString('ja-JP'),'']);
+  rows.push(['','','','','','','']);
+  rows.push(['【備考・注意事項】','','','','','','']);
+  rows.push(['・本見積の有効期限は発行日より1ヶ月間とさせていただきます。','','','','','','']);
+  rows.push(['・お支払い条件：相談','','','','','','']);
+  rows.push(['・材料費の大幅な変動により、再見積りをお願いする場合がございます。','','','','','','']);
+  rows.push(['・仕様変更が生じた場合は、別途お見積りさせていただきます。','','','','','','']);
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:16},{wch:42},{wch:8},{wch:6},{wch:14},{wch:16},{wch:20}];
+  XLSX.utils.book_append_sheet(wb, ws, '見積書');
+  XLSX.writeFile(wb, currentCase.name + '邸_概算見積書_' + today.toISOString().slice(0,10) + '.xlsx');
+  toast('見積書を出力しました');
+}
+
+// ── Init ──
+init();
+</script>
+</body>
+</html>
